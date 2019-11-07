@@ -12,55 +12,104 @@ using System.Net.Http;
 using OAuth;
 using System.Net;
 using System.IO;
+using System.Web;
+using Microsoft.Extensions.Configuration;
 
 namespace EtsyService.Controllers
 {
-  [ApiController]
-  public class AuthorizationController : Controller
-  {
-    TelemetryClient telemetryClient = new TelemetryClient();
-
-    [HttpGet]
-    [Route("api/Authorization/GenerateUserAuthorizationUrl")]
-    public async Task<GenerateUserAuthorizationUrlResponse> GenerateUserAuthorizationUrlAsync()
+    [ApiController]
+    public class AuthorizationController : Controller
     {
-      try
-      {
-        string url = "https://openapi.etsy.com/v2/oauth/request_token";
-        string OAUTH_CONSUMER_KEY = "fss7iai057pzpsmotkdbu1do";
-        string OAUTH_CONSUMER_SECRET = "w7dh83j6xq";
+        TelemetryClient telemetryClient = new TelemetryClient();
+        private static string OAUTH_CONSUMER_KEY = "fss7iai057pzpsmotkdbu1do";
+        private static string OAUTH_CONSUMER_SECRET = "w7dh83j6xq";
+        private IConfiguration configuration;
 
-        var auth = OAuthRequest.ForRequestToken(OAUTH_CONSUMER_KEY, OAUTH_CONSUMER_SECRET,"oob");
-        auth.RequestUrl = url;
-        var authHeader = auth.GetAuthorizationHeader();
-
-        var request = (HttpWebRequest)WebRequest.Create(auth.RequestUrl);
-        request.Method = "GET";
-        request.Headers.Add("Authorization", authHeader);
-        
-        request.AuthenticationLevel = System.Net.Security.AuthenticationLevel.None;
-        var response = await request.GetResponseAsync();
-        var message = new StreamReader(response.GetResponseStream()).ReadToEnd();
-
-        return new GenerateUserAuthorizationUrlResponse();
-       // return await Task.FromResult<GenerateUserAuthorizationUrlResponse>(new GenerateUserAuthorizationUrlResponse { IsSuccess = true, URL = url });
-      }
-      catch (Exception ex)
-      {
-        telemetryClient.TrackException(ex);
-        return new GenerateUserAuthorizationUrlResponse
+        public AuthorizationController(IConfiguration configuration)
         {
-          IsSuccess = false,
-          ErrorMessage = ex.Message
-        };
-      }
-    }
+            this.configuration = configuration;
+        }
 
-    [HttpPost]
-    [Route("api/Authorization/Test")]
-    public void Test()
-    {
-      var x = Request;
-    } 
-  }
+        [HttpGet]
+        [Route("api/Authorization/GenerateUserAuthorizationUrl")]
+        public async Task<GenerateUserAuthorizationUrlResponse> GenerateUserAuthorizationUrlAsync()
+        {
+            try
+            {
+                string url = "https://openapi.etsy.com/v2/oauth/request_token";
+
+                var auth = OAuthRequest.ForRequestToken(OAUTH_CONSUMER_KEY, OAUTH_CONSUMER_SECRET, "http://etsyservice-test.azurewebsites.net/api/Authorization/ConfirmAuthorization");
+                auth.RequestUrl = url;
+                var authHeader = auth.GetAuthorizationHeader();
+
+                var request = (HttpWebRequest)WebRequest.Create(auth.RequestUrl);
+                request.Method = "GET";
+                request.Headers.Add("Authorization", authHeader);
+
+                request.AuthenticationLevel = System.Net.Security.AuthenticationLevel.None;
+                var response = await request.GetResponseAsync();
+                var responseText = new StreamReader(response.GetResponseStream()).ReadToEnd();
+                var responseQueryParams = HttpUtility.ParseQueryString(responseText);
+                var authUrl = responseQueryParams["login_url"];
+
+                var tokenSecret = responseQueryParams["oauth_token_secret"];
+                configuration["tokenSecret"] = tokenSecret;
+
+                // return new GenerateUserAuthorizationUrlResponse();
+                return await Task.FromResult<GenerateUserAuthorizationUrlResponse>(new GenerateUserAuthorizationUrlResponse { IsSuccess = true, URL = authUrl });
+            }
+            catch (Exception ex)
+            {
+                telemetryClient.TrackException(ex);
+                return new GenerateUserAuthorizationUrlResponse
+                {
+                    IsSuccess = false,
+                    ErrorMessage = ex.Message
+                };
+            }
+        }
+
+        [HttpGet]
+        [Route("api/Authorization/ConfirmAuthorization")]
+        public async Task<ActionResult> ConfirmAsync()
+        {
+            var result = new ViewResult();
+            //WebResponse response = null;
+            try
+            {
+                var url = "https://openapi.etsy.com/v2/oauth/access_token";
+
+                var queryParams = HttpUtility.ParseQueryString(Request.QueryString.ToString());
+                var verifier = queryParams["oauth_verifier"];
+                var token = queryParams["oauth_token"];
+                var tokenSecret = configuration["tokenSecret"];
+
+                //var auth = OAuthRequest.ForRequestToken(OAUTH_CONSUMER_KEY, OAUTH_CONSUMER_SECRET);
+                var auth = OAuthRequest.ForAccessToken(OAUTH_CONSUMER_KEY, OAUTH_CONSUMER_SECRET, token, tokenSecret, verifier);
+
+                auth.RequestUrl = url;
+                var authHeader = auth.GetAuthorizationHeader();
+
+                //var request = (HttpWebRequest)WebRequest.Create(auth.RequestUrl);
+                //request.Method = "GET";
+                //request.Headers.Add("Authorization", authHeader);
+
+                //request.AuthenticationLevel = System.Net.Security.AuthenticationLevel.None;
+
+                HttpClient client = new HttpClient();
+                client.DefaultRequestHeaders.Add("Authorization", authHeader);
+                var response = await client.GetAsync(url);
+                var message = await response.Content.ReadAsStringAsync();
+
+                result.ViewName = "Confirm";
+                return result;
+            }
+            catch (Exception ex)
+            {
+                telemetryClient.TrackException(ex, new Dictionary<string, string> { { "ErrorMessage", ex.Message } });
+            }
+            result.ViewName = "Error";
+            return result;
+        }
+    }
 }
