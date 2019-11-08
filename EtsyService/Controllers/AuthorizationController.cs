@@ -14,6 +14,7 @@ using System.Net;
 using System.IO;
 using System.Web;
 using Microsoft.Extensions.Configuration;
+using EtsyService.Managers;
 
 namespace EtsyService.Controllers
 {
@@ -24,10 +25,12 @@ namespace EtsyService.Controllers
         private static string OAUTH_CONSUMER_KEY = "fss7iai057pzpsmotkdbu1do";
         private static string OAUTH_CONSUMER_SECRET = "w7dh83j6xq";
         private IConfiguration configuration;
+        private readonly IAuthorizationManager authorizationManager;
 
-        public AuthorizationController(IConfiguration configuration)
+        public AuthorizationController(IConfiguration configuration, IAuthorizationManager authorizationManager)
         {
             this.configuration = configuration;
+            this.authorizationManager = authorizationManager;
         }
 
         [HttpGet]
@@ -74,7 +77,6 @@ namespace EtsyService.Controllers
         public async Task<ActionResult> ConfirmAsync()
         {
             var result = new ViewResult();
-            //WebResponse response = null;
             try
             {
                 var url = "https://openapi.etsy.com/v2/oauth/access_token";
@@ -83,26 +85,26 @@ namespace EtsyService.Controllers
                 var verifier = queryParams["oauth_verifier"];
                 var token = queryParams["oauth_token"];
                 var tokenSecret = configuration["tokenSecret"];
-
-                //var auth = OAuthRequest.ForRequestToken(OAUTH_CONSUMER_KEY, OAUTH_CONSUMER_SECRET);
                 var auth = OAuthRequest.ForAccessToken(OAUTH_CONSUMER_KEY, OAUTH_CONSUMER_SECRET, token, tokenSecret, verifier);
 
                 auth.RequestUrl = url;
                 var authHeader = auth.GetAuthorizationHeader();
 
-                //var request = (HttpWebRequest)WebRequest.Create(auth.RequestUrl);
-                //request.Method = "GET";
-                //request.Headers.Add("Authorization", authHeader);
-
-                //request.AuthenticationLevel = System.Net.Security.AuthenticationLevel.None;
-
                 HttpClient client = new HttpClient();
                 client.DefaultRequestHeaders.Add("Authorization", authHeader);
                 var response = await client.GetAsync(url);
-                var message = await response.Content.ReadAsStringAsync();
+                if (response.IsSuccessStatusCode)
+                {
+                    var responseMessage = await response.Content.ReadAsStringAsync();
+                    var etsyAuth = HttpUtility.ParseQueryString(responseMessage);
+                    var save =  authorizationManager.SetEtsyAuth(etsyAuth["oauth_token"], etsyAuth["oauth_token_secret"], 0);
 
-                result.ViewName = "Confirm";
-                return result;
+                    if (!save)
+                        throw new Exception("Problem saving auth to key vault.");
+                    result.ViewName = "Confirm";
+                    return result;
+                }
+                throw new Exception("Problem getting auth: " + await response.Content.ReadAsStringAsync());
             }
             catch (Exception ex)
             {

@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using EtsyService.Managers;
+using EtsyService.Managers.Interfaces;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -38,6 +40,8 @@ namespace EtsyService
 
 
             services.AddMvc().SetCompatibilityVersion(CompatibilityVersion.Version_2_2);
+            services.AddTransient<IKeyManager, KeyManager>();
+            services.AddTransient<IAuthorizationManager, AuthorizationManager>();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
