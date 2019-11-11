@@ -24,11 +24,19 @@
     <Folder Include="Managers\" />
     <Folder Include="Managers\Interfaces\" />
     <Folder Include="Controllers\RequestObjects\" />
+    <Folder Include="Controllers\ResponseObjects\FromEtsy\" />
+    <Folder Include="wwwroot\Images\" />
   </ItemGroup>
   <ItemGroup>
     <None Remove="Managers\IAuthorizationManager.css" />
   </ItemGroup>
   <ItemGroup>
     <Compile Remove="Managers\AzureServiceTokenProvider.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Remove="wwwroot\Images\tshirt.jpg" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="wwwroot\Images\tshirt.jpg" />
   </ItemGroup>
 </Project>
