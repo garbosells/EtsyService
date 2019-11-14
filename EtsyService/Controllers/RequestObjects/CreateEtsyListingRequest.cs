@@ -14,5 +14,6 @@ namespace EtsyService.Controllers.RequestObjects
         public string when_made { get; set; }
         public string state { get; set; }
         public long taxonomy_id { get; set; }
+        public long[] image_ids { get; set; }
     }
 }
